@@ -223,7 +223,7 @@ async def disable(_, message):
     await message.reply("✅ Disabled")
 
 # ------------------------
-# 🔥 AUTO DELETE
+# 🔥 AUTO DELETE + BIO CHECK
 # ------------------------
 @bot.on_message(filters.group & ~filters.service)
 async def auto_delete(_, message):
@@ -238,6 +238,18 @@ async def auto_delete(_, message):
         return
 
     try:
+        # 🔥 BIO LINK CHECK
+        user = await bot.get_chat(message.from_user.id)
+        bio = user.bio or ""
+
+        if "http" in bio or "t.me" in bio or "www" in bio:
+            warn = await message.reply("⚠️ Bio me link allowed nahi!")
+            await message.delete()
+            await asyncio.sleep(5)
+            await warn.delete()
+            return
+
+        # 🔥 NORMAL AUTO DELETE
         if message.text and group.get("text_time"):
             await asyncio.sleep(group["text_time"])
             await message.delete()
@@ -248,6 +260,7 @@ async def auto_delete(_, message):
         ) and group.get("media_time"):
             await asyncio.sleep(group["media_time"])
             await message.delete()
+
     except:
         pass
 
