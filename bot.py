@@ -3,64 +3,39 @@ import asyncio
 from config import API_ID, API_HASH, BOT_TOKEN, DATABASE_URL, BOT_USERNAME, FORCE_SUB_CHANNEL, OWNER_ID
 
 from pyrogram import Client, filters, enums
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from flask import Flask, redirect
 from threading import Thread
 from motor.motor_asyncio import AsyncIOMotorClient
-from pyrogram.errors import FloodWait
 
 # MongoDB
 client = AsyncIOMotorClient(DATABASE_URL)
 db = client['databas']
 groups = db['group_id']
-users = db['users']
 
-# Bot setup
+# Bot
 bot = Client("deletebot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 
-# Force Sub
-async def check_force_sub(client, user_id):
+# 🔹 Helper: Admin Check
+async def is_admin(chat_id, user_id):
     try:
-        member = await client.get_chat_member(f"@{FORCE_SUB_CHANNEL}", user_id)
-        return member.status in [
-            enums.ChatMemberStatus.OWNER,
-            enums.ChatMemberStatus.ADMINISTRATOR,
-            enums.ChatMemberStatus.MEMBER
-        ]
+        member = await bot.get_chat_member(chat_id, user_id)
+        return member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]
     except:
         return False
 
 
-# START
-@bot.on_message(filters.command("start") & filters.private)
-async def start(_, message):
-    user_id = message.from_user.id
-
-    if not await check_force_sub(bot, user_id):
-        btn = [[InlineKeyboardButton("🔔 Join Channel", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]]
-        return await message.reply("🔒 Join channel to use bot", reply_markup=InlineKeyboardMarkup(btn))
-
-    await users.update_one({"user_id": user_id}, {"$set": {"user_id": user_id}}, upsert=True)
-
-    buttons = [
-        [InlineKeyboardButton("➕ Add Me", url=f"http://t.me/{BOT_USERNAME}?startgroup=true&admin=delete_messages")],
-    ]
-    await message.reply("👋 Auto Delete Bot (Text + Media Separate)", reply_markup=InlineKeyboardMarkup(buttons))
-
-
-# SET TEXT TIME
+# 🔹 SET TEXT TIME
 @bot.on_message(filters.command("set_text") & filters.group)
 async def set_text(_, message):
-    member = await bot.get_chat_member(message.chat.id, message.from_user.id)
-    if member.status not in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+    if not await is_admin(message.chat.id, message.from_user.id):
         return await message.delete()
 
-    if len(message.command) < 2:
-        return await message.reply("Usage: /set_text 60")
-
-    if not message.command[1].isdigit():
-        return await message.reply("❌ Invalid time")
+    if len(message.command) < 2 or not message.command[1].isdigit():
+        msg = await message.reply("Usage: /set_text 60")
+        await asyncio.sleep(5)
+        return await msg.delete()
 
     await groups.update_one(
         {"group_id": message.chat.id},
@@ -74,18 +49,16 @@ async def set_text(_, message):
     await message.delete()
 
 
-# SET MEDIA TIME
+# 🔹 SET MEDIA TIME
 @bot.on_message(filters.command("set_media") & filters.group)
 async def set_media(_, message):
-    member = await bot.get_chat_member(message.chat.id, message.from_user.id)
-    if member.status not in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+    if not await is_admin(message.chat.id, message.from_user.id):
         return await message.delete()
 
-    if len(message.command) < 2:
-        return await message.reply("Usage: /set_media 60")
-
-    if not message.command[1].isdigit():
-        return await message.reply("❌ Invalid time")
+    if len(message.command) < 2 or not message.command[1].isdigit():
+        msg = await message.reply("Usage: /set_media 60")
+        await asyncio.sleep(5)
+        return await msg.delete()
 
     await groups.update_one(
         {"group_id": message.chat.id},
@@ -99,35 +72,42 @@ async def set_media(_, message):
     await message.delete()
 
 
-# STATUS
+# 🔹 STATUS
 @bot.on_message(filters.command("status") & filters.group)
 async def status(_, message):
     group = await groups.find_one({"group_id": message.chat.id})
     if not group:
-        return await message.reply("❌ Not set")
+        return await message.reply("❌ Not configured")
 
-    text_time = group.get("text_time", "Not set")
-    media_time = group.get("media_time", "Not set")
+    text = group.get("text_time", "Off")
+    media = group.get("media_time", "Off")
 
-    await message.reply(f"📝 Text: {text_time}\n📁 Media: {media_time}")
+    msg = await message.reply(f"⚙️ Settings:\n📝 Text: {text}\n📁 Media: {media}")
+    await asyncio.sleep(5)
+    await msg.delete()
+    await message.delete()
 
 
-# DISABLE
+# 🔹 DISABLE
 @bot.on_message(filters.command("disable") & filters.group)
 async def disable(_, message):
-    member = await bot.get_chat_member(message.chat.id, message.from_user.id)
-    if member.status not in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+    if not await is_admin(message.chat.id, message.from_user.id):
         return await message.delete()
 
     await groups.delete_one({"group_id": message.chat.id})
-    await message.reply("✅ Disabled")
+
+    msg = await message.reply("✅ Auto-delete disabled")
+    await asyncio.sleep(5)
+    await msg.delete()
+    await message.delete()
 
 
-# AUTO DELETE
+# 🔥 AUTO DELETE ENGINE (PRO)
 @bot.on_message(filters.group & ~filters.service)
 async def auto_delete(_, message):
     chat_id = message.chat.id
 
+    # ignore bots
     if message.from_user and message.from_user.is_bot:
         return
 
@@ -135,17 +115,14 @@ async def auto_delete(_, message):
     if not group:
         return
 
-    try:
-        member = await bot.get_chat_member(chat_id, message.from_user.id)
-        if member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
-            return
-    except:
-        pass
+    # ignore admins
+    if await is_admin(chat_id, message.from_user.id):
+        return
 
     try:
         # TEXT
         if message.text and group.get("text_time"):
-            await asyncio.sleep(int(group["text_time"]))
+            await asyncio.sleep(group["text_time"])
             await message.delete()
 
         # MEDIA
@@ -153,14 +130,14 @@ async def auto_delete(_, message):
             message.photo or message.video or message.document or
             message.audio or message.voice or message.sticker
         ) and group.get("media_time"):
-            await asyncio.sleep(int(group["media_time"]))
+            await asyncio.sleep(group["media_time"])
             await message.delete()
 
     except Exception as e:
-        print(e)
+        print(f"Delete error: {e}")
 
 
-# Flask
+# 🌐 Flask Keep Alive
 app = Flask(__name__)
 
 @app.route('/')
