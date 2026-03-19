@@ -28,12 +28,8 @@ async def is_admin(chat_id, user_id):
 # ------------------------
 def main_menu():
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("❓ Help & Commands", callback_data="help")
-        ],
-        [
-            InlineKeyboardButton("➕ Add Me", url=f"https://t.me/{BOT_USERNAME}?startgroup=true")
-        ]
+        [InlineKeyboardButton("❓ Help & Commands", callback_data="help")],
+        [InlineKeyboardButton("➕ Add Me", url=f"https://t.me/{BOT_USERNAME}?startgroup=true")]
     ])
 
 # ------------------------
@@ -46,8 +42,8 @@ def help_menu():
             InlineKeyboardButton("📁 Set Media", callback_data="set_media")
         ],
         [
-            InlineKeyboardButton("🔗 Bio ON", callback_data="bio_on"),
-            InlineKeyboardButton("🚫 Bio OFF", callback_data="bio_off")
+            InlineKeyboardButton("🧠 Edit Guard", callback_data="edit"),
+            InlineKeyboardButton("🔗 Bio Guard", callback_data="bio")
         ],
         [
             InlineKeyboardButton("⬅️ Back", callback_data="back")
@@ -94,12 +90,16 @@ async def callback(client, query: CallbackQuery):
 
     elif data == "set_text":
         text = "📝 /set_text 60\nSet text delete time"
+
     elif data == "set_media":
         text = "📁 /set_media 60\nSet media delete time"
-    elif data == "bio_on":
-        text = "🔗 /bio_on\nEnable bio guard"
-    elif data == "bio_off":
-        text = "🚫 /bio_off\nDisable bio guard"
+
+    elif data == "edit":
+        text = "🧠 /edit\nToggle edit protection ON/OFF"
+
+    elif data == "bio":
+        text = "🔗 /bio_on /bio_off\nEnable or disable bio guard"
+
     else:
         return
 
@@ -144,6 +144,25 @@ async def set_media(client, message):
     )
     await message.reply("✅ Media delete set")
 
+# 🔥 EDIT TOGGLE
+@bot.on_message(filters.command("edit") & filters.group)
+async def edit_toggle(client, message):
+    if not await is_admin(message.chat.id, message.from_user.id):
+        return await message.delete()
+
+    group = await groups.find_one({"group_id": message.chat.id})
+    current = group.get("edit_guard", False) if group else False
+    new = not current
+
+    await groups.update_one(
+        {"group_id": message.chat.id},
+        {"$set": {"edit_guard": new}},
+        upsert=True
+    )
+
+    await message.reply(f"🧠 Edit Guard {'ON ✅' if new else 'OFF ❌'}")
+
+# 🔥 BIO GUARD
 @bot.on_message(filters.command("bio_on") & filters.group)
 async def bio_on(client, message):
     if not await is_admin(message.chat.id, message.from_user.id):
@@ -176,6 +195,7 @@ async def auto_delete(client, message):
         return
 
     try:
+        # BIO GUARD
         if group.get("bio_guard"):
             user = await bot.get_chat(message.from_user.id)
             bio = (user.bio or "").lower()
@@ -184,14 +204,39 @@ async def auto_delete(client, message):
                 await message.delete()
                 return
 
+        # TEXT DELETE
         if message.text and group.get("text_time"):
             await asyncio.sleep(group["text_time"])
             await message.delete()
 
-        elif (message.photo or message.video or message.document) and group.get("media_time"):
+        # MEDIA DELETE
+        elif (message.photo or message.video or message.document or message.sticker) and group.get("media_time"):
             await asyncio.sleep(group["media_time"])
             await message.delete()
 
+    except:
+        pass
+
+# ------------------------
+# EDIT DETECT
+# ------------------------
+@bot.on_edited_message(filters.group)
+async def edit_detect(client, message):
+    group = await groups.find_one({"group_id": message.chat.id})
+
+    if not group or not group.get("edit_guard"):
+        return
+
+    if await is_admin(message.chat.id, message.from_user.id):
+        return
+
+    try:
+        warn = await message.reply(
+            f"⚠️ {message.from_user.mention} edited message!\n🗑 Deleted."
+        )
+        await message.delete()
+        await asyncio.sleep(5)
+        await warn.delete()
     except:
         pass
 
