@@ -230,13 +230,18 @@ async def auto_delete(_, message):
         return
 
     try:
-        # 🔥 BIO CHECK (ONLY IF ENABLED)
+        # 🔥 BIO CHECK (LINK + USERNAME)
         if group.get("bio_guard"):
             user = await bot.get_chat(message.from_user.id)
-            bio = user.bio or ""
+            bio = (user.bio or "").lower()
 
-            if "http" in bio or "t.me" in bio or "www" in bio:
-                warn = await message.reply("⚠️ Bio me link allowed nahi!")
+            if (
+                "http" in bio
+                or "t.me" in bio
+                or "www" in bio
+                or "@" in bio
+            ):
+                warn = await message.reply("⚠️ Bio me link/username allowed nahi!")
                 await message.delete()
                 await asyncio.sleep(5)
                 await warn.delete()
@@ -254,6 +259,28 @@ async def auto_delete(_, message):
             await asyncio.sleep(group["media_time"])
             await message.delete()
 
+    except:
+        pass
+
+# ------------------------
+# 🔥 EDIT DETECTION
+# ------------------------
+@bot.on_edited_message(filters.group)
+async def edit_detect(_, message):
+    group = await groups.find_one({"group_id": message.chat.id})
+    if not group or not group.get("edit_guard"):
+        return
+
+    if await is_admin(message.chat.id, message.from_user.id):
+        return
+
+    try:
+        warn = await message.reply(
+            f"⚠️ {message.from_user.mention} edited message!\n🗑 Deleted."
+        )
+        await message.delete()
+        await asyncio.sleep(5)
+        await warn.delete()
     except:
         pass
 
