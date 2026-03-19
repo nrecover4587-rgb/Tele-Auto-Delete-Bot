@@ -3,7 +3,7 @@ from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from config import API_ID, API_HASH, BOT_TOKEN, DATABASE_URL, BOT_USERNAME, FORCE_SUB_CHANNEL
+from config import API_ID, API_HASH, BOT_TOKEN, DATABASE_URL, BOT_USERNAME
 
 # MongoDB
 mongo = AsyncIOMotorClient(DATABASE_URL)
@@ -24,24 +24,10 @@ async def is_admin(chat_id, user_id):
         return False
 
 # ------------------------
-# FORCE SUB
-# ------------------------
-async def check_force_sub(user_id):
-    try:
-        member = await bot.get_chat_member(f"@{FORCE_SUB_CHANNEL}", user_id)
-        return member.status in ["member", "administrator", "creator"]
-    except:
-        return False
-
-# ------------------------
 # MAIN MENU
 # ------------------------
 def main_menu():
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🔄 Update Channel", url=f"https://t.me/{FORCE_SUB_CHANNEL}"),
-            InlineKeyboardButton("💬 Update Group", url=f"https://t.me/{FORCE_SUB_CHANNEL}")
-        ],
         [
             InlineKeyboardButton("❓ Help & Commands", callback_data="help")
         ],
@@ -60,16 +46,8 @@ def help_menu():
             InlineKeyboardButton("📁 Set Media", callback_data="set_media")
         ],
         [
-            InlineKeyboardButton("🧠 Edit ON", callback_data="edit_on"),
-            InlineKeyboardButton("❌ Edit OFF", callback_data="edit_off")
-        ],
-        [
             InlineKeyboardButton("🔗 Bio ON", callback_data="bio_on"),
             InlineKeyboardButton("🚫 Bio OFF", callback_data="bio_off")
-        ],
-        [
-            InlineKeyboardButton("📊 Status", callback_data="status"),
-            InlineKeyboardButton("⚠️ Disable", callback_data="disable")
         ],
         [
             InlineKeyboardButton("⬅️ Back", callback_data="back")
@@ -81,24 +59,14 @@ def help_menu():
 # ------------------------
 @bot.on_message(filters.command("start") & filters.private)
 async def start(client, message):
-    user_id = message.from_user.id
     name = message.from_user.first_name
-
-    if not await check_force_sub(user_id):
-        return await message.reply_text(
-            "🔒 Please join our channel first",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔔 Join Channel", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]
-            ])
-        )
 
     caption = (
         f"🛡 Hello {name}!\n\n"
         "🤖 Auto Delete Bot\n"
         "Keeps your group clean & safe.\n\n"
         "━━━━━━━━━━━━━━━\n"
-        "⚡ Made by MistuBots\n"
-        f"📢 https://t.me/{FORCE_SUB_CHANNEL}"
+        "⚡ Made by MistuBots"
     )
 
     await message.reply_photo(
@@ -124,25 +92,24 @@ async def callback(client, query: CallbackQuery):
     elif data == "back":
         await query.message.edit_text("🔙 Main Menu", reply_markup=main_menu())
 
+    elif data == "set_text":
+        text = "📝 /set_text 60\nSet text delete time"
+    elif data == "set_media":
+        text = "📁 /set_media 60\nSet media delete time"
+    elif data == "bio_on":
+        text = "🔗 /bio_on\nEnable bio guard"
+    elif data == "bio_off":
+        text = "🚫 /bio_off\nDisable bio guard"
     else:
-        texts = {
-            "set_text": "📝 /set_text 60\nSet text delete time",
-            "set_media": "📁 /set_media 60\nSet media delete time",
-            "edit_on": "🧠 /edit_on\nEnable edit protection",
-            "edit_off": "❌ /edit_off\nDisable edit protection",
-            "bio_on": "🔗 /bio_on\nEnable bio guard",
-            "bio_off": "🚫 /bio_off\nDisable bio guard",
-            "status": "📊 /status\nCheck settings",
-            "disable": "⚠️ /disable\nDisable system"
-        }
+        return
 
-        if data in texts:
-            await query.message.edit_text(
-                texts[data],
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("⬅️ Back", callback_data="help")]
-                ])
-            )
+    if data not in ["help", "back"]:
+        await query.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("⬅️ Back", callback_data="help")]
+            ])
+        )
 
 # ------------------------
 # COMMANDS
