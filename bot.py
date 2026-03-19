@@ -12,12 +12,7 @@ db = mongo["databas"]
 groups = db["group_id"]
 
 # Bot
-bot = Client(
-    "AutoDeleteBot",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    bot_token=BOT_TOKEN
-)
+bot = Client("AutoDeleteBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # ------------------------
 # 🔹 Admin Check
@@ -44,7 +39,23 @@ async def check_force_sub(user_id):
         return False
 
 # ------------------------
-# 🔥 START COMMAND
+# 🔥 MAIN MENU
+# ------------------------
+def main_menu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Add Me To Group", url=f"https://t.me/{BOT_USERNAME}?startgroup=true&admin=delete_messages")],
+        [
+            InlineKeyboardButton("⚙️ Commands", callback_data="help"),
+            InlineKeyboardButton("✨ Features", callback_data="features")
+        ],
+        [
+            InlineKeyboardButton("👨‍💻 Owner", user_id=OWNER_ID),
+            InlineKeyboardButton("📢 Updates", url=f"https://t.me/{FORCE_SUB_CHANNEL}")
+        ]
+    ])
+
+# ------------------------
+# 🔥 START
 # ------------------------
 @bot.on_message(filters.command("start") & filters.private)
 async def start(_, message):
@@ -55,21 +66,17 @@ async def start(_, message):
         btn = [[InlineKeyboardButton("🔔 Join Channel", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]]
         return await message.reply("🔒 Join channel to use bot", reply_markup=InlineKeyboardMarkup(btn))
 
-    buttons = [
-        [InlineKeyboardButton("➕ Add Me", url=f"https://t.me/{BOT_USERNAME}?startgroup=true&admin=delete_messages")],
-        [
-            InlineKeyboardButton("⚙️ Commands", callback_data="help"),
-            InlineKeyboardButton("ℹ️ About", callback_data="about")
-        ],
-        [
-            InlineKeyboardButton("👨‍💻 Owner", user_id=OWNER_ID),
-            InlineKeyboardButton("📢 Updates", url=f"https://t.me/{FORCE_SUB_CHANNEL}")
-        ]
-    ]
-
     await message.reply_text(
-        f"✨ Hello {name}!\n\n🤖 Auto Delete Bot Ready!",
-        reply_markup=InlineKeyboardMarkup(buttons)
+        f"""✨ **Hey {name}!**
+
+🤖 Auto Delete Bot
+
+💣 Deletes text & media automatically
+🧠 Edit protection available
+
+🚀 Add me to your group!""",
+        reply_markup=main_menu(),
+        parse_mode=enums.ParseMode.MARKDOWN
     )
 
 # ------------------------
@@ -80,25 +87,34 @@ async def callback(_, query: CallbackQuery):
 
     if query.data == "help":
         await query.message.edit_text(
-            "⚙️ Commands:\n\n"
+            "⚙️ **Commands Panel**\n\n"
             "/set_text 60\n"
             "/set_media 60\n"
+            "/edit_on\n"
+            "/edit_off\n"
             "/status\n"
             "/disable",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back")]])
         )
 
-    elif query.data == "about":
+    elif query.data == "features":
         await query.message.edit_text(
-            "ℹ️ Auto Delete Bot\n\nClean your group automatically!",
+            "✨ **Features**\n\n"
+            "⚡ Auto delete\n"
+            "📁 Media + text support\n"
+            "🛡 Admin safe\n"
+            "🧠 Edit protection",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back")]])
         )
 
     elif query.data == "back":
-        await query.message.edit_text("🔙 Back to menu")
+        await query.message.edit_text(
+            "🔙 **Main Menu**",
+            reply_markup=main_menu()
+        )
 
 # ------------------------
-# 🔥 SET TEXT TIME
+# 🔥 SET TEXT
 # ------------------------
 @bot.on_message(filters.command("set_text") & filters.group)
 async def set_text(_, message):
@@ -120,7 +136,7 @@ async def set_text(_, message):
     await message.delete()
 
 # ------------------------
-# 🔥 SET MEDIA TIME
+# 🔥 SET MEDIA
 # ------------------------
 @bot.on_message(filters.command("set_media") & filters.group)
 async def set_media(_, message):
@@ -142,6 +158,44 @@ async def set_media(_, message):
     await message.delete()
 
 # ------------------------
+# 🔥 EDIT ON
+# ------------------------
+@bot.on_message(filters.command("edit_on") & filters.group)
+async def edit_on(_, message):
+    if not await is_admin(message.chat.id, message.from_user.id):
+        return await message.delete()
+
+    await groups.update_one(
+        {"group_id": message.chat.id},
+        {"$set": {"edit_guard": True}},
+        upsert=True
+    )
+
+    msg = await message.reply("✅ Edit protection enabled")
+    await asyncio.sleep(5)
+    await msg.delete()
+    await message.delete()
+
+# ------------------------
+# 🔥 EDIT OFF
+# ------------------------
+@bot.on_message(filters.command("edit_off") & filters.group)
+async def edit_off(_, message):
+    if not await is_admin(message.chat.id, message.from_user.id):
+        return await message.delete()
+
+    await groups.update_one(
+        {"group_id": message.chat.id},
+        {"$set": {"edit_guard": False}},
+        upsert=True
+    )
+
+    msg = await message.reply("❌ Edit protection disabled")
+    await asyncio.sleep(5)
+    await msg.delete()
+    await message.delete()
+
+# ------------------------
 # 🔥 STATUS
 # ------------------------
 @bot.on_message(filters.command("status") & filters.group)
@@ -150,7 +204,9 @@ async def status(_, message):
     if not group:
         return await message.reply("❌ Not configured")
 
-    await message.reply(f"Text: {group.get('text_time')} | Media: {group.get('media_time')}")
+    await message.reply(
+        f"📝 Text: {group.get('text_time')}\n📁 Media: {group.get('media_time')}\n🧠 Edit: {group.get('edit_guard')}"
+    )
 
 # ------------------------
 # 🔥 DISABLE
@@ -193,7 +249,29 @@ async def auto_delete(_, message):
         pass
 
 # ------------------------
-# 🔥 RUN BOT (HEROKU SAFE)
+# 🔥 EDIT DETECTION
+# ------------------------
+@bot.on_edited_message(filters.group)
+async def edit_detect(_, message):
+    group = await groups.find_one({"group_id": message.chat.id})
+    if not group or not group.get("edit_guard"):
+        return
+
+    if await is_admin(message.chat.id, message.from_user.id):
+        return
+
+    try:
+        warn = await message.reply(
+            f"⚠️ {message.from_user.mention} edited message!\n🗑 Deleted."
+        )
+        await message.delete()
+        await asyncio.sleep(5)
+        await warn.delete()
+    except:
+        pass
+
+# ------------------------
+# 🔥 RUN BOT
 # ------------------------
 async def main():
     await bot.start()
@@ -201,13 +279,10 @@ async def main():
     await asyncio.Event().wait()
 
 async def shutdown():
-    print("🛑 Stopping Bot...")
     await bot.stop()
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
-
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown()))
-
     loop.run_until_complete(main())
