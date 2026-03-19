@@ -77,10 +77,7 @@ async def start(_, message):
         "🚀 Add me to your group!"
     )
 
-    await message.reply_text(
-        text,
-        reply_markup=main_menu()
-    )
+    await message.reply_text(text, reply_markup=main_menu())
 
 # ------------------------
 # 🔥 CALLBACKS
@@ -95,6 +92,8 @@ async def callback(_, query: CallbackQuery):
             "/set_media 60\n"
             "/edit_on\n"
             "/edit_off\n"
+            "/bio_on\n"
+            "/bio_off\n"
             "/status\n"
             "/disable",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back")]])
@@ -106,7 +105,8 @@ async def callback(_, query: CallbackQuery):
             "⚡ Auto delete\n"
             "📁 Media + text support\n"
             "🛡 Admin safe\n"
-            "🧠 Edit protection",
+            "🧠 Edit protection\n"
+            "🔗 Bio link guard",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back")]])
         )
 
@@ -115,6 +115,44 @@ async def callback(_, query: CallbackQuery):
             "✨ Main Menu\n\nSelect an option below:",
             reply_markup=main_menu()
         )
+
+# ------------------------
+# 🔥 BIO ON
+# ------------------------
+@bot.on_message(filters.command("bio_on") & filters.group)
+async def bio_on(_, message):
+    if not await is_admin(message.chat.id, message.from_user.id):
+        return await message.delete()
+
+    await groups.update_one(
+        {"group_id": message.chat.id},
+        {"$set": {"bio_guard": True}},
+        upsert=True
+    )
+
+    msg = await message.reply("✅ Bio link guard enabled")
+    await asyncio.sleep(5)
+    await msg.delete()
+    await message.delete()
+
+# ------------------------
+# 🔥 BIO OFF
+# ------------------------
+@bot.on_message(filters.command("bio_off") & filters.group)
+async def bio_off(_, message):
+    if not await is_admin(message.chat.id, message.from_user.id):
+        return await message.delete()
+
+    await groups.update_one(
+        {"group_id": message.chat.id},
+        {"$set": {"bio_guard": False}},
+        upsert=True
+    )
+
+    msg = await message.reply("❌ Bio link guard disabled")
+    await asyncio.sleep(5)
+    await msg.delete()
+    await message.delete()
 
 # ------------------------
 # 🔥 SET TEXT
@@ -161,44 +199,6 @@ async def set_media(_, message):
     await message.delete()
 
 # ------------------------
-# 🔥 EDIT ON
-# ------------------------
-@bot.on_message(filters.command("edit_on") & filters.group)
-async def edit_on(_, message):
-    if not await is_admin(message.chat.id, message.from_user.id):
-        return await message.delete()
-
-    await groups.update_one(
-        {"group_id": message.chat.id},
-        {"$set": {"edit_guard": True}},
-        upsert=True
-    )
-
-    msg = await message.reply("✅ Edit protection enabled")
-    await asyncio.sleep(5)
-    await msg.delete()
-    await message.delete()
-
-# ------------------------
-# 🔥 EDIT OFF
-# ------------------------
-@bot.on_message(filters.command("edit_off") & filters.group)
-async def edit_off(_, message):
-    if not await is_admin(message.chat.id, message.from_user.id):
-        return await message.delete()
-
-    await groups.update_one(
-        {"group_id": message.chat.id},
-        {"$set": {"edit_guard": False}},
-        upsert=True
-    )
-
-    msg = await message.reply("❌ Edit protection disabled")
-    await asyncio.sleep(5)
-    await msg.delete()
-    await message.delete()
-
-# ------------------------
 # 🔥 STATUS
 # ------------------------
 @bot.on_message(filters.command("status") & filters.group)
@@ -208,19 +208,11 @@ async def status(_, message):
         return await message.reply("❌ Not configured")
 
     await message.reply(
-        f"📝 Text: {group.get('text_time')}\n📁 Media: {group.get('media_time')}\n🧠 Edit: {group.get('edit_guard')}"
+        f"📝 Text: {group.get('text_time')}\n"
+        f"📁 Media: {group.get('media_time')}\n"
+        f"🧠 Edit: {group.get('edit_guard')}\n"
+        f"🔗 Bio Guard: {group.get('bio_guard', False)}"
     )
-
-# ------------------------
-# 🔥 DISABLE
-# ------------------------
-@bot.on_message(filters.command("disable") & filters.group)
-async def disable(_, message):
-    if not await is_admin(message.chat.id, message.from_user.id):
-        return await message.delete()
-
-    await groups.delete_one({"group_id": message.chat.id})
-    await message.reply("✅ Disabled")
 
 # ------------------------
 # 🔥 AUTO DELETE + BIO CHECK
@@ -238,18 +230,19 @@ async def auto_delete(_, message):
         return
 
     try:
-        # 🔥 BIO LINK CHECK
-        user = await bot.get_chat(message.from_user.id)
-        bio = user.bio or ""
+        # 🔥 BIO CHECK (ONLY IF ENABLED)
+        if group.get("bio_guard"):
+            user = await bot.get_chat(message.from_user.id)
+            bio = user.bio or ""
 
-        if "http" in bio or "t.me" in bio or "www" in bio:
-            warn = await message.reply("⚠️ Bio me link allowed nahi!")
-            await message.delete()
-            await asyncio.sleep(5)
-            await warn.delete()
-            return
+            if "http" in bio or "t.me" in bio or "www" in bio:
+                warn = await message.reply("⚠️ Bio me link allowed nahi!")
+                await message.delete()
+                await asyncio.sleep(5)
+                await warn.delete()
+                return
 
-        # 🔥 NORMAL AUTO DELETE
+        # 🔥 NORMAL DELETE
         if message.text and group.get("text_time"):
             await asyncio.sleep(group["text_time"])
             await message.delete()
@@ -261,28 +254,6 @@ async def auto_delete(_, message):
             await asyncio.sleep(group["media_time"])
             await message.delete()
 
-    except:
-        pass
-
-# ------------------------
-# 🔥 EDIT DETECTION
-# ------------------------
-@bot.on_edited_message(filters.group)
-async def edit_detect(_, message):
-    group = await groups.find_one({"group_id": message.chat.id})
-    if not group or not group.get("edit_guard"):
-        return
-
-    if await is_admin(message.chat.id, message.from_user.id):
-        return
-
-    try:
-        warn = await message.reply(
-            f"⚠️ {message.from_user.mention} edited message!\n🗑 Deleted."
-        )
-        await message.delete()
-        await asyncio.sleep(5)
-        await warn.delete()
     except:
         pass
 
