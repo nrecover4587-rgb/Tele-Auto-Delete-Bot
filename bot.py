@@ -6,10 +6,12 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from config import API_ID, API_HASH, BOT_TOKEN, DATABASE_URL, BOT_USERNAME, FORCE_SUB_CHANNEL, OWNER_ID
 
+# MongoDB
 mongo = AsyncIOMotorClient(DATABASE_URL)
 db = mongo["databas"]
 groups = db["group_id"]
 
+# Bot
 bot = Client("AutoDeleteBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # ------------------------
@@ -54,7 +56,7 @@ def main_menu():
     ])
 
 # ------------------------
-# HELP MENU (ONLY YOUR CMDS)
+# HELP MENU
 # ------------------------
 def help_menu():
     return InlineKeyboardMarkup([
@@ -80,7 +82,7 @@ def help_menu():
     ])
 
 # ------------------------
-# START
+# START (IMAGE + SPOILER)
 # ------------------------
 @bot.on_message(filters.command("start") & filters.private)
 async def start(_, message):
@@ -100,7 +102,7 @@ async def start(_, message):
     )
 
     await message.reply_photo(
-        photo="https://files.catbox.moe/vp4s7x.jpg",
+        photo="https://graph.org/file/your-image.jpg",  # 👈 yaha apni image link daal
         caption=caption,
         has_spoiler=True,
         reply_markup=main_menu()
@@ -154,13 +156,12 @@ async def callback(_, query: CallbackQuery):
         )
 
 # ------------------------
-# BIO TOGGLE
+# BIO ON/OFF
 # ------------------------
 @bot.on_message(filters.command("bio_on") & filters.group)
 async def bio_on(_, message):
     if not await is_admin(message.chat.id, message.from_user.id):
         return await message.delete()
-
     await groups.update_one({"group_id": message.chat.id}, {"$set": {"bio_guard": True}}, upsert=True)
     await message.reply("✅ Bio Guard ON")
 
@@ -168,7 +169,6 @@ async def bio_on(_, message):
 async def bio_off(_, message):
     if not await is_admin(message.chat.id, message.from_user.id):
         return await message.delete()
-
     await groups.update_one({"group_id": message.chat.id}, {"$set": {"bio_guard": False}}, upsert=True)
     await message.reply("❌ Bio Guard OFF")
 
@@ -199,12 +199,25 @@ async def auto_delete(_, message):
         pass
 
 # ------------------------
-# RUN
+# RUN (HEROKU FIX)
 # ------------------------
 async def main():
     await bot.start()
-    print("Bot Started")
-    await asyncio.Event().wait()
+    print("🔥 Bot Started")
+
+    stop_event = asyncio.Event()
+
+    def shutdown():
+        print("🛑 Shutting down...")
+        stop_event.set()
+
+    loop = asyncio.get_event_loop()
+    loop.add_signal_handler(signal.SIGTERM, shutdown)
+    loop.add_signal_handler(signal.SIGINT, shutdown)
+
+    await stop_event.wait()
+    await bot.stop()
+    print("✅ Bot Stopped")
 
 if __name__ == "__main__":
     asyncio.run(main())
