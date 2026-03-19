@@ -102,7 +102,7 @@ async def start(_, message):
     )
 
     await message.reply_photo(
-        photo="https://graph.org/file/your-image.jpg",  # 👈 yaha apni image link daal
+        photo="https://files.catbox.moe/vp4s7x.jpg",  # 👈 yaha apni image link daal
         caption=caption,
         has_spoiler=True,
         reply_markup=main_menu()
