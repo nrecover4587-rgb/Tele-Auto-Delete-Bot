@@ -19,7 +19,7 @@ users = db['users']
 bot = Client("deletebot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 
-# ➤ Force Subscribe checker (only for admins)
+# ➤ Force Subscribe checker
 async def check_force_sub(client, chat_id, user_id):
     try:
         member = await client.get_chat_member(f"@{FORCE_SUB_CHANNEL}", user_id)
@@ -46,9 +46,8 @@ async def start(_, message):
         [InlineKeyboardButton("❓ Help", callback_data="help"), InlineKeyboardButton("ℹ️ About", callback_data="about")]
     ]
     await message.reply_text(
-        "**👋 Welcome to Auto Deleter Bot!**\n\nI can auto-delete group messages after a set time.\nUse me in your groups to keep them clean.",
-        reply_markup=InlineKeyboardMarkup(buttons),
-        parse_mode=enums.ParseMode.MARKDOWN
+        "**👋 Welcome to Auto Deleter Bot!**\n\nI can auto-delete all messages (text + media) after a set time.",
+        reply_markup=InlineKeyboardMarkup(buttons)
     )
 
 
@@ -64,13 +63,12 @@ async def callback_handler(_, query: CallbackQuery):
         )
     elif query.data == "about":
         await query.message.edit_text(
-            "**ℹ️ About**\n\n"
-            "Auto Deleter Bot by @codexempire.\nMaintains group cleanliness by deleting messages after a time.\n",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back"),InlineKeyboardButton("support", url="https://t.me/codexempire")]])
+            "**ℹ️ About**\n\nAuto Deleter Bot\nDeletes text + media automatically.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back")]])
         )
     elif query.data == "back":
         await query.message.edit_text(
-            "**👋 Welcome to Auto Deleter Bot!**\n\nI can auto-delete group messages after a set time.\nUse me in your groups to keep them clean.",
+            "**👋 Welcome Back!**",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("➕ Add Your Group ➕", url=f"http://t.me/{BOT_USERNAME}?startgroup=none&admin=delete_messages")],
                 [InlineKeyboardButton("❓ Help", callback_data="help"), InlineKeyboardButton("ℹ️ About", callback_data="about")]
@@ -78,154 +76,79 @@ async def callback_handler(_, query: CallbackQuery):
         )
 
 
-@bot.on_message(filters.command("set_time"))
+@bot.on_message(filters.command("set_time") & filters.group)
 async def set_delete_time(_, message):
-    if message.chat.type == enums.ChatType.PRIVATE:
-        return await message.reply("❌ This command works only in groups.")
-
     user_id = message.from_user.id
-    is_admin = False
-    async for m in bot.get_chat_members(message.chat.id, filter=enums.ChatMembersFilter.ADMINISTRATORS):
-        if m.user.id == user_id:
-            is_admin = True
-            break
 
-    if not is_admin:
-        try:
-            await message.delete()
-        except: pass
-        return
+    member = await bot.get_chat_member(message.chat.id, user_id)
+    if member.status not in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+        return await message.delete()
 
     if len(message.command) < 2:
-        buttons = [[
-            InlineKeyboardButton("2 min", callback_data="time_120"),
-            InlineKeyboardButton("5 min", callback_data="time_300"),
-            InlineKeyboardButton("15 min", callback_data="time_900")
-        ], [
-            InlineKeyboardButton("Custom", callback_data="custom")
-        ]]
-        msg = await message.reply("⏱️ Choose delete time:", reply_markup=InlineKeyboardMarkup(buttons))
-        await asyncio.sleep(10)
-        try:
-            await msg.delete()
-            await message.delete()
-        except: pass
-        return
+        return await message.reply("Usage: /set_time 60")
 
-    delete_time = message.text.split()[1]
-    if not delete_time.isdigit():
-        reply = await message.reply("❌ Time must be a number in seconds.")
-        await asyncio.sleep(5)
-        try:
-            await reply.delete()
-            await message.delete()
-        except: pass
-        return
+    time = message.command[1]
+    if not time.isdigit():
+        return await message.reply("❌ Invalid time")
 
-    await groups.update_one({"group_id": message.chat.id}, {"$set": {"delete_time": int(delete_time)}}, upsert=True)
-    reply = await message.reply(f"✅ Auto-delete time set to {delete_time} seconds.")
+    await groups.update_one(
+        {"group_id": message.chat.id},
+        {"$set": {"delete_time": int(time)}},
+        upsert=True
+    )
+
+    msg = await message.reply(f"✅ Delete time set to {time} sec")
     await asyncio.sleep(5)
-    try:
-        await reply.delete()
-        await message.delete()
-    except: pass
+    await msg.delete()
+    await message.delete()
 
 
 @bot.on_message(filters.command("status") & filters.group)
 async def status(_, message):
     group = await groups.find_one({"group_id": message.chat.id})
     if group:
-        await message.reply_text(f"**🕒 Current delete time:** `{group['delete_time']}` seconds")
+        await message.reply(f"🕒 Delete time: {group['delete_time']} sec")
     else:
-        await message.reply_text("**🛑 Auto-delete is not set for this group.**")
+        await message.reply("❌ Not set")
 
 
 @bot.on_message(filters.command("disable") & filters.group)
 async def disable(_, message):
-    user_id = message.from_user.id
-    async for m in bot.get_chat_members(message.chat.id, filter=enums.ChatMembersFilter.ADMINISTRATORS):
-        if m.user.id == user_id:
-            await groups.delete_one({"group_id": message.chat.id})
-            await message.reply_text("✅ **Auto-delete disabled for this group.**")
-            return
-    await message.reply("❌ Only admins can disable auto-delete.")
+    member = await bot.get_chat_member(message.chat.id, message.from_user.id)
+    if member.status not in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+        return await message.delete()
+
+    await groups.delete_one({"group_id": message.chat.id})
+    await message.reply("✅ Disabled")
 
 
-@bot.on_message(filters.command("broadcast") & filters.private)
-async def broadcast(_, message):
-    if message.from_user.id != OWNER_ID:
-        return await message.reply("❌ You're not authorized.")
-
-    if len(message.command) < 2:
-        return await message.reply("Usage: `/broadcast Your message here...`", parse_mode=enums.ParseMode.MARKDOWN)
-
-    text = message.text.split(None, 1)[1]
-    sent = 0
-    failed = 0
-    async for user in users.find({}):
-        try:
-            await bot.send_message(user["user_id"], text)
-            sent += 1
-            await asyncio.sleep(0.1)
-        except FloodWait as e:
-            await asyncio.sleep(e.value)
-        except:
-            failed += 1
-            continue
-
-    await message.reply(f"✅ Broadcast sent to {sent} users.\n❌ Failed: {failed}")
-
-
-@bot.on_message(filters.command("users") & filters.private)
-async def total_users(_, message):
-    if message.from_user.id != OWNER_ID:
-        return await message.reply("❌ You're not authorized.")
-    total = await users.count_documents({})
-    await message.reply(f"👤 Total users: `{total}`", parse_mode=enums.ParseMode.MARKDOWN)
-
-
-@bot.on_message(filters.group & filters.text)
+# 🔥 AUTO DELETE (TEXT + MEDIA)
+@bot.on_message(filters.group & ~filters.service)
 async def auto_delete(_, message):
     chat_id = message.chat.id
-    user_id = message.from_user.id
-    if message.from_user.is_bot:
+
+    if message.from_user and message.from_user.is_bot:
         return
 
     group = await groups.find_one({"group_id": chat_id})
     if not group:
         return
 
-    async for m in bot.get_chat_members(chat_id, filter=enums.ChatMembersFilter.ADMINISTRATORS):
-        if m.user.id == user_id:
+    try:
+        member = await bot.get_chat_member(chat_id, message.from_user.id)
+        if member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
             return
+    except:
+        pass
 
     try:
         await asyncio.sleep(int(group["delete_time"]))
         await message.delete()
     except Exception as e:
-        print(f"Error deleting message: {e}")
+        print(e)
 
 
-@bot.on_message(filters.command("g_broadcast") & filters.private)
-async def broadcast(_, message):
-    if message.from_user.id != OWNER_ID:
-        return await message.reply("🚫 You are not allowed to broadcast.")
-
-    if len(message.command) < 2:
-        return await message.reply("📢 Usage: /broadcast Your message here")
-
-    text = message.text.split(None, 1)[1]
-    success = 0
-    fail = 0
-    async for group in groups.find({}):
-        try:
-            await bot.send_message(group["group_id"], text)
-            success += 1
-        except:
-            fail += 1
-    await message.reply(f"✅ Broadcast completed.\nSent: {success}, Failed: {fail}")
-    
-# Flask keep-alive
+# Flask keep alive
 app = Flask(__name__)
 
 @app.route('/')
