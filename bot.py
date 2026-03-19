@@ -1,10 +1,9 @@
 import asyncio
-import signal
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from config import API_ID, API_HASH, BOT_TOKEN, DATABASE_URL, BOT_USERNAME, FORCE_SUB_CHANNEL, OWNER_ID
+from config import API_ID, API_HASH, BOT_TOKEN, DATABASE_URL, BOT_USERNAME, FORCE_SUB_CHANNEL
 
 # MongoDB
 mongo = AsyncIOMotorClient(DATABASE_URL)
@@ -30,11 +29,7 @@ async def is_admin(chat_id, user_id):
 async def check_force_sub(user_id):
     try:
         member = await bot.get_chat_member(f"@{FORCE_SUB_CHANNEL}", user_id)
-        return member.status in [
-            enums.ChatMemberStatus.OWNER,
-            enums.ChatMemberStatus.ADMINISTRATOR,
-            enums.ChatMemberStatus.MEMBER
-        ]
+        return member.status in ["member", "administrator", "creator"]
     except:
         return False
 
@@ -51,7 +46,7 @@ def main_menu():
             InlineKeyboardButton("❓ Help & Commands", callback_data="help")
         ],
         [
-            InlineKeyboardButton("➕ Add me to Your Group", url=f"https://t.me/{BOT_USERNAME}?startgroup=true&admin=delete_messages")
+            InlineKeyboardButton("➕ Add Me", url=f"https://t.me/{BOT_USERNAME}?startgroup=true")
         ]
     ])
 
@@ -82,25 +77,24 @@ def help_menu():
     ])
 
 # ------------------------
-# START (FIXED)
+# START
 # ------------------------
 @bot.on_message(filters.command("start") & filters.private)
-async def start(_, message):
+async def start(client, message):
     user_id = message.from_user.id
     name = message.from_user.first_name
 
-    # ✅ Force sub with button
     if not await check_force_sub(user_id):
         return await message.reply_text(
-            "🔒 Please join our channel first to use the bot",
+            "🔒 Please join our channel first",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔔 Join Channel", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]
             ])
         )
 
     caption = (
-        f"🛡 Hello {name}!\n"
-        "I'm Auto Delete Bot 🤖\n\n"
+        f"🛡 Hello {name}!\n\n"
+        "🤖 Auto Delete Bot\n"
         "Keeps your group clean & safe.\n\n"
         "━━━━━━━━━━━━━━━\n"
         "⚡ Made by MistuBots\n"
@@ -118,7 +112,7 @@ async def start(_, message):
 # CALLBACKS
 # ------------------------
 @bot.on_callback_query()
-async def callback(_, query: CallbackQuery):
+async def callback(client, query: CallbackQuery):
     data = query.data
 
     if data == "help":
@@ -128,10 +122,7 @@ async def callback(_, query: CallbackQuery):
         )
 
     elif data == "back":
-        await query.message.edit_text(
-            "🔙 Main Menu",
-            reply_markup=main_menu()
-        )
+        await query.message.edit_text("🔙 Main Menu", reply_markup=main_menu())
 
     else:
         texts = {
@@ -154,19 +145,51 @@ async def callback(_, query: CallbackQuery):
             )
 
 # ------------------------
-# BIO ON/OFF
+# COMMANDS
 # ------------------------
-@bot.on_message(filters.command("bio_on") & filters.group)
-async def bio_on(_, message):
+@bot.on_message(filters.command("set_text") & filters.group)
+async def set_text(client, message):
     if not await is_admin(message.chat.id, message.from_user.id):
         return await message.delete()
+
+    if len(message.command) < 2:
+        return await message.reply("Usage: /set_text 60")
+
+    await groups.update_one(
+        {"group_id": message.chat.id},
+        {"$set": {"text_time": int(message.command[1])}},
+        upsert=True
+    )
+    await message.reply("✅ Text delete set")
+
+@bot.on_message(filters.command("set_media") & filters.group)
+async def set_media(client, message):
+    if not await is_admin(message.chat.id, message.from_user.id):
+        return await message.delete()
+
+    if len(message.command) < 2:
+        return await message.reply("Usage: /set_media 60")
+
+    await groups.update_one(
+        {"group_id": message.chat.id},
+        {"$set": {"media_time": int(message.command[1])}},
+        upsert=True
+    )
+    await message.reply("✅ Media delete set")
+
+@bot.on_message(filters.command("bio_on") & filters.group)
+async def bio_on(client, message):
+    if not await is_admin(message.chat.id, message.from_user.id):
+        return await message.delete()
+
     await groups.update_one({"group_id": message.chat.id}, {"$set": {"bio_guard": True}}, upsert=True)
     await message.reply("✅ Bio Guard ON")
 
 @bot.on_message(filters.command("bio_off") & filters.group)
-async def bio_off(_, message):
+async def bio_off(client, message):
     if not await is_admin(message.chat.id, message.from_user.id):
         return await message.delete()
+
     await groups.update_one({"group_id": message.chat.id}, {"$set": {"bio_guard": False}}, upsert=True)
     await message.reply("❌ Bio Guard OFF")
 
@@ -174,7 +197,7 @@ async def bio_off(_, message):
 # AUTO DELETE + BIO CHECK
 # ------------------------
 @bot.on_message(filters.group & ~filters.service)
-async def auto_delete(_, message):
+async def auto_delete(client, message):
     if message.from_user and message.from_user.is_bot:
         return
 
@@ -190,32 +213,22 @@ async def auto_delete(_, message):
             user = await bot.get_chat(message.from_user.id)
             bio = (user.bio or "").lower()
 
-            if "http" in bio or "t.me" in bio or "@" in bio:
+            if "http" in bio or "@" in bio:
                 await message.delete()
                 return
+
+        if message.text and group.get("text_time"):
+            await asyncio.sleep(group["text_time"])
+            await message.delete()
+
+        elif (message.photo or message.video or message.document) and group.get("media_time"):
+            await asyncio.sleep(group["media_time"])
+            await message.delete()
+
     except:
         pass
 
 # ------------------------
-# RUN (HEROKU FIX)
+# RUN
 # ------------------------
-async def main():
-    await bot.start()
-    print("🔥 Bot Started")
-
-    stop_event = asyncio.Event()
-
-    def shutdown():
-        print("🛑 Shutting down...")
-        stop_event.set()
-
-    loop = asyncio.get_event_loop()
-    loop.add_signal_handler(signal.SIGTERM, shutdown)
-    loop.add_signal_handler(signal.SIGINT, shutdown)
-
-    await stop_event.wait()
-    await bot.stop()
-    print("✅ Bot Stopped")
-
-if __name__ == "__main__":
-    asyncio.run(main())
+bot.run()
