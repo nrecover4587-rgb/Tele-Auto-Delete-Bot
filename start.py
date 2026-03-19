@@ -1,10 +1,10 @@
 from pyrogram import Client, filters, enums
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, InputMediaPhoto
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
-from config import BOT_USERNAME, FORCE_SUB_CHANNEL, OWNER_ID, START_IMG
+from config import BOT_USERNAME, FORCE_SUB_CHANNEL, OWNER_ID
 
 
-# 🔹 Force Subscribe
+# 🔹 Force Subscribe Check
 async def check_force_sub(client, user_id):
     try:
         member = await client.get_chat_member(f"@{FORCE_SUB_CHANNEL}", user_id)
@@ -19,16 +19,17 @@ async def check_force_sub(client, user_id):
 
 # 🔥 START COMMAND
 @Client.on_message(filters.command("start") & filters.private)
-async def start(client, message):
+async def start_cmd(client, message):
     user_id = message.from_user.id
     name = message.from_user.first_name
 
     # Force Sub
     if not await check_force_sub(client, user_id):
-        buttons = [[InlineKeyboardButton("🔔 Join Channel", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]]
-        return await message.reply_photo(
-            photo=START_IMG,
-            caption="🔒 **Access Denied!**\n\nJoin our channel to use this bot.",
+        buttons = [[
+            InlineKeyboardButton("🔔 Join Channel", url=f"https://t.me/{FORCE_SUB_CHANNEL}")
+        ]]
+        return await message.reply_text(
+            "🔒 **Access Denied!**\n\nJoin our channel to use this bot.",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
 
@@ -37,7 +38,7 @@ async def start(client, message):
         [InlineKeyboardButton("➕ Add Me To Group", url=f"https://t.me/{BOT_USERNAME}?startgroup=true&admin=delete_messages")],
         [
             InlineKeyboardButton("⚙️ Commands", callback_data="help"),
-            InlineKeyboardButton("✨ Features", callback_data="features")
+            InlineKeyboardButton("ℹ️ About", callback_data="about")
         ],
         [
             InlineKeyboardButton("👨‍💻 Owner", user_id=OWNER_ID),
@@ -45,106 +46,72 @@ async def start(client, message):
         ]
     ]
 
-    caption = f"""
-✨ **Hey {name}!**
+    text = f"""
+✨ **Hello {name}!**
 
-🤖 I'm your **Advanced Auto Delete Bot**
+🤖 I'm an **Auto Delete Bot**
 
-💣 I can automatically clean your group by deleting:
-• 📝 Text Messages  
-• 📁 Media Files (Photo, Video, Docs)  
+💣 Features:
+• Auto delete text messages  
+• Auto delete media files  
+• Separate timers  
 
-⚙️ Control everything with simple commands  
-⚡ Fast • Smart • Reliable  
+⚙️ Commands:
+• /set_text <sec>
+• /set_media <sec>
+• /status
+• /disable  
 
-━━━━━━━━━━━━━━━
-🚀 **Add me & make your group clean like PRO!**
+🚀 Add me to your group & enjoy clean chats!
 """
 
-    await message.reply_photo(
-        photo=START_IMG,
-        caption=caption,
+    await message.reply_text(
+        text,
         reply_markup=InlineKeyboardMarkup(buttons),
         parse_mode=enums.ParseMode.MARKDOWN
     )
 
 
-# 🔥 CALLBACK SYSTEM
+# 🔥 CALLBACK HANDLER
 @Client.on_callback_query()
-async def callbacks(client, query: CallbackQuery):
+async def callback_handler(client, query: CallbackQuery):
 
-    # HELP MENU
+    # HELP
     if query.data == "help":
-        text = """
-⚙️ **Commands Panel**
-
-📝 /set_text 60  
-→ Auto delete text  
-
-📁 /set_media 60  
-→ Auto delete media  
-
-📊 /status  
-→ Check current settings  
-
-❌ /disable  
-→ Turn off auto delete  
-"""
-
-        await query.message.edit_media(
-            InputMediaPhoto(
-                media=START_IMG,
-                caption=text
-            ),
+        await query.message.edit_text(
+            "⚙️ **Commands Panel**\n\n"
+            "📝 /set_text 60 → delete text\n"
+            "📁 /set_media 60 → delete media\n"
+            "📊 /status → check settings\n"
+            "❌ /disable → turn off",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔙 Back", callback_data="back")]
             ])
         )
 
-    # FEATURES MENU
-    elif query.data == "features":
-        text = """
-✨ **Bot Features**
-
-⚡ Fast Auto Delete  
-📝 Text & Media Separate Timer  
-🛡 Admin Protection  
-🚫 No Spam / Clean Chat  
-🎯 Simple Commands  
-
-💯 Fully Automatic System
-"""
-
-        await query.message.edit_media(
-            InputMediaPhoto(
-                media=START_IMG,
-                caption=text
-            ),
+    # ABOUT
+    elif query.data == "about":
+        await query.message.edit_text(
+            "ℹ️ **About Bot**\n\n"
+            "This bot auto deletes messages (text + media)\n"
+            "after a set time.\n\n"
+            "Made with ❤️ for clean groups.",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔙 Back", callback_data="back")]
             ])
         )
 
-    # BACK BUTTON
+    # BACK
     elif query.data == "back":
         buttons = [
-            [InlineKeyboardButton("➕ Add Me To Group", url=f"https://t.me/{BOT_USERNAME}?startgroup=true&admin=delete_messages")],
+            [InlineKeyboardButton("➕ Add Me", url=f"https://t.me/{BOT_USERNAME}?startgroup=true&admin=delete_messages")],
             [
                 InlineKeyboardButton("⚙️ Commands", callback_data="help"),
-                InlineKeyboardButton("✨ Features", callback_data="features")
-            ],
-            [
-                InlineKeyboardButton("👨‍💻 Owner", user_id=OWNER_ID),
-                InlineKeyboardButton("📢 Updates", url=f"https://t.me/{FORCE_SUB_CHANNEL}")
+                InlineKeyboardButton("ℹ️ About", callback_data="about")
             ]
         ]
 
-        caption = "🔙 Back to main menu"
-
-        await query.message.edit_media(
-            InputMediaPhoto(
-                media=START_IMG,
-                caption=caption
-            ),
+        await query.message.edit_text(
+            "🔙 Back to main menu",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
