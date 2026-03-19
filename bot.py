@@ -1,32 +1,37 @@
-import os
 import asyncio
-from config import API_ID, API_HASH, BOT_TOKEN, DATABASE_URL, BOT_USERNAME, FORCE_SUB_CHANNEL, OWNER_ID
-
 from pyrogram import Client, filters, enums
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from flask import Flask, redirect
-from threading import Thread
 from motor.motor_asyncio import AsyncIOMotorClient
 
+from config import API_ID, API_HASH, BOT_TOKEN, DATABASE_URL
+from start import *   # 👈 tera naya start.py yahin se load hoga
+
 # MongoDB
-client = AsyncIOMotorClient(DATABASE_URL)
-db = client['databas']
-groups = db['group_id']
+mongo = AsyncIOMotorClient(DATABASE_URL)
+db = mongo["databas"]
+groups = db["group_id"]
 
 # Bot
-bot = Client("deletebot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+bot = Client(
+    "AutoDeleteBot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN
+)
 
 
-# 🔹 Helper: Admin Check
+# 🔹 Admin Check
 async def is_admin(chat_id, user_id):
     try:
         member = await bot.get_chat_member(chat_id, user_id)
-        return member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]
+        return member.status in [
+            enums.ChatMemberStatus.ADMINISTRATOR,
+            enums.ChatMemberStatus.OWNER
+        ]
     except:
         return False
 
 
-# 🔹 SET TEXT TIME
+# 🔥 SET TEXT TIME
 @bot.on_message(filters.command("set_text") & filters.group)
 async def set_text(_, message):
     if not await is_admin(message.chat.id, message.from_user.id):
@@ -49,7 +54,7 @@ async def set_text(_, message):
     await message.delete()
 
 
-# 🔹 SET MEDIA TIME
+# 🔥 SET MEDIA TIME
 @bot.on_message(filters.command("set_media") & filters.group)
 async def set_media(_, message):
     if not await is_admin(message.chat.id, message.from_user.id):
@@ -72,12 +77,14 @@ async def set_media(_, message):
     await message.delete()
 
 
-# 🔹 STATUS
+# 🔥 STATUS
 @bot.on_message(filters.command("status") & filters.group)
 async def status(_, message):
     group = await groups.find_one({"group_id": message.chat.id})
     if not group:
-        return await message.reply("❌ Not configured")
+        msg = await message.reply("❌ Not configured")
+        await asyncio.sleep(5)
+        return await msg.delete()
 
     text = group.get("text_time", "Off")
     media = group.get("media_time", "Off")
@@ -88,7 +95,7 @@ async def status(_, message):
     await message.delete()
 
 
-# 🔹 DISABLE
+# 🔥 DISABLE
 @bot.on_message(filters.command("disable") & filters.group)
 async def disable(_, message):
     if not await is_admin(message.chat.id, message.from_user.id):
@@ -102,12 +109,11 @@ async def disable(_, message):
     await message.delete()
 
 
-# 🔥 AUTO DELETE ENGINE (PRO)
+# 🔥 AUTO DELETE ENGINE
 @bot.on_message(filters.group & ~filters.service)
 async def auto_delete(_, message):
     chat_id = message.chat.id
 
-    # ignore bots
     if message.from_user and message.from_user.is_bot:
         return
 
@@ -115,7 +121,6 @@ async def auto_delete(_, message):
     if not group:
         return
 
-    # ignore admins
     if await is_admin(chat_id, message.from_user.id):
         return
 
@@ -137,16 +142,7 @@ async def auto_delete(_, message):
         print(f"Delete error: {e}")
 
 
-# 🌐 Flask Keep Alive
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return redirect(f"https://t.me/{BOT_USERNAME}")
-
-def run():
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
-
+# 🚀 RUN BOT
 if __name__ == "__main__":
-    Thread(target=run).start()
+    print("🔥 Bot Started Successfully")
     bot.run()
