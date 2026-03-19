@@ -64,19 +64,22 @@ async def start(_, message):
 
     if not await check_force_sub(user_id):
         btn = [[InlineKeyboardButton("🔔 Join Channel", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]]
-        return await message.reply("🔒 Join channel to use bot", reply_markup=InlineKeyboardMarkup(btn))
+        return await message.reply_text(
+            "🔒 Join channel to use bot",
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+
+    text = (
+        f"✨ Hey {name}!\n\n"
+        "🤖 Auto Delete Bot\n\n"
+        "💣 Deletes text & media automatically\n"
+        "🧠 Edit protection available\n\n"
+        "🚀 Add me to your group!"
+    )
 
     await message.reply_text(
-        f"""✨ **Hey {name}!**
-
-🤖 Auto Delete Bot
-
-💣 Deletes text & media automatically
-🧠 Edit protection available
-
-🚀 Add me to your group!""",
-        reply_markup=main_menu(),
-        parse_mode=enums.ParseMode.MARKDOWN
+        text,
+        reply_markup=main_menu()
     )
 
 # ------------------------
@@ -87,7 +90,7 @@ async def callback(_, query: CallbackQuery):
 
     if query.data == "help":
         await query.message.edit_text(
-            "⚙️ **Commands Panel**\n\n"
+            "⚙️ Commands Panel\n\n"
             "/set_text 60\n"
             "/set_media 60\n"
             "/edit_on\n"
@@ -99,7 +102,7 @@ async def callback(_, query: CallbackQuery):
 
     elif query.data == "features":
         await query.message.edit_text(
-            "✨ **Features**\n\n"
+            "✨ Features\n\n"
             "⚡ Auto delete\n"
             "📁 Media + text support\n"
             "🛡 Admin safe\n"
@@ -109,7 +112,7 @@ async def callback(_, query: CallbackQuery):
 
     elif query.data == "back":
         await query.message.edit_text(
-            "🔙 **Main Menu**",
+            "✨ Main Menu\n\nSelect an option below:",
             reply_markup=main_menu()
         )
 
