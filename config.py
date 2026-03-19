@@ -8,3 +8,4 @@ BOT_USERNAME = os.environ.get("BOT_USERNAME","Cleartextsbot") # Without @
 FORCE_SUB_CHANNEL = os.environ.get("FORCE_SUB_CHANNEL", "codexempire")  # without @
 PORT = int(os.environ.get("PORT", 8080))  # for Flask binding (Koyeb)
 OWNER_ID = int(os.environ.get("OWNER_ID", "7771222218"))  # your Telegram user ID
+START_IMG = "https://graph.org/file/your-image-link.jpg"
