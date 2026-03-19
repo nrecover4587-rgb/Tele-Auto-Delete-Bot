@@ -55,7 +55,7 @@ def main_menu():
     ])
 
 # ------------------------
-# 🔥 START
+# 🔥 START (IMAGE + SPOILER)
 # ------------------------
 @bot.on_message(filters.command("start") & filters.private)
 async def start(_, message):
@@ -77,7 +77,12 @@ async def start(_, message):
         "🚀 Add me to your group!"
     )
 
-    await message.reply_text(text, reply_markup=main_menu())
+    await message.reply_photo(
+        photo="https://files.catbox.moe/vp4s7x.jpg",  # 👈 apni image link daal
+        caption=text,
+        has_spoiler=True,
+        reply_markup=main_menu()
+    )
 
 # ------------------------
 # 🔥 CALLBACKS
@@ -230,24 +235,17 @@ async def auto_delete(_, message):
         return
 
     try:
-        # 🔥 BIO CHECK (LINK + USERNAME)
         if group.get("bio_guard"):
             user = await bot.get_chat(message.from_user.id)
             bio = (user.bio or "").lower()
 
-            if (
-                "http" in bio
-                or "t.me" in bio
-                or "www" in bio
-                or "@" in bio
-            ):
+            if "http" in bio or "t.me" in bio or "www" in bio or "@" in bio:
                 warn = await message.reply("⚠️ Bio me link/username allowed nahi!")
                 await message.delete()
                 await asyncio.sleep(5)
                 await warn.delete()
                 return
 
-        # 🔥 NORMAL DELETE
         if message.text and group.get("text_time"):
             await asyncio.sleep(group["text_time"])
             await message.delete()
@@ -259,28 +257,6 @@ async def auto_delete(_, message):
             await asyncio.sleep(group["media_time"])
             await message.delete()
 
-    except:
-        pass
-
-# ------------------------
-# 🔥 EDIT DETECTION
-# ------------------------
-@bot.on_edited_message(filters.group)
-async def edit_detect(_, message):
-    group = await groups.find_one({"group_id": message.chat.id})
-    if not group or not group.get("edit_guard"):
-        return
-
-    if await is_admin(message.chat.id, message.from_user.id):
-        return
-
-    try:
-        warn = await message.reply(
-            f"⚠️ {message.from_user.mention} edited message!\n🗑 Deleted."
-        )
-        await message.delete()
-        await asyncio.sleep(5)
-        await warn.delete()
     except:
         pass
 
