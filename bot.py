@@ -82,15 +82,21 @@ def help_menu():
     ])
 
 # ------------------------
-# START (IMAGE + SPOILER)
+# START (FIXED)
 # ------------------------
 @bot.on_message(filters.command("start") & filters.private)
 async def start(_, message):
     user_id = message.from_user.id
     name = message.from_user.first_name
 
+    # ✅ Force sub with button
     if not await check_force_sub(user_id):
-        return await message.reply("🔒 Join channel first")
+        return await message.reply_text(
+            "🔒 Please join our channel first to use the bot",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔔 Join Channel", url=f"https://t.me/{FORCE_SUB_CHANNEL}")]
+            ])
+        )
 
     caption = (
         f"🛡 Hello {name}!\n"
@@ -102,7 +108,7 @@ async def start(_, message):
     )
 
     await message.reply_photo(
-        photo="https://files.catbox.moe/vp4s7x.jpg",  # 👈 yaha apni image link daal
+        photo="https://files.catbox.moe/vp4s7x.jpg",
         caption=caption,
         has_spoiler=True,
         reply_markup=main_menu()
@@ -113,7 +119,6 @@ async def start(_, message):
 # ------------------------
 @bot.on_callback_query()
 async def callback(_, query: CallbackQuery):
-
     data = query.data
 
     if data == "help":
@@ -128,32 +133,25 @@ async def callback(_, query: CallbackQuery):
             reply_markup=main_menu()
         )
 
-    elif data == "set_text":
-        text = "📝 /set_text 60\nSet text delete time"
-    elif data == "set_media":
-        text = "📁 /set_media 60\nSet media delete time"
-    elif data == "edit_on":
-        text = "🧠 /edit_on\nEnable edit protection"
-    elif data == "edit_off":
-        text = "❌ /edit_off\nDisable edit protection"
-    elif data == "bio_on":
-        text = "🔗 /bio_on\nEnable bio guard"
-    elif data == "bio_off":
-        text = "🚫 /bio_off\nDisable bio guard"
-    elif data == "status":
-        text = "📊 /status\nCheck settings"
-    elif data == "disable":
-        text = "⚠️ /disable\nDisable system"
     else:
-        return
+        texts = {
+            "set_text": "📝 /set_text 60\nSet text delete time",
+            "set_media": "📁 /set_media 60\nSet media delete time",
+            "edit_on": "🧠 /edit_on\nEnable edit protection",
+            "edit_off": "❌ /edit_off\nDisable edit protection",
+            "bio_on": "🔗 /bio_on\nEnable bio guard",
+            "bio_off": "🚫 /bio_off\nDisable bio guard",
+            "status": "📊 /status\nCheck settings",
+            "disable": "⚠️ /disable\nDisable system"
+        }
 
-    if data not in ["help", "back"]:
-        await query.message.edit_text(
-            text,
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("⬅️ Back", callback_data="help")]
-            ])
-        )
+        if data in texts:
+            await query.message.edit_text(
+                texts[data],
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("⬅️ Back", callback_data="help")]
+                ])
+            )
 
 # ------------------------
 # BIO ON/OFF
