@@ -14,6 +14,11 @@ groups = db["group_id"]
 bot = Client("AutoDeleteBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # ------------------------
+# OWNER CONFIG
+# ------------------------
+OWNER_ID = 123456789  # 👉 apna Telegram ID daal
+
+# ------------------------
 # ADMIN CHECK
 # ------------------------
 async def is_admin(chat_id, user_id):
@@ -180,6 +185,20 @@ async def bio_off(client, message):
     await message.reply("❌ Bio Guard OFF")
 
 # ------------------------
+# AUTO SAVE GROUP
+# ------------------------
+@bot.on_message(filters.group)
+async def save_group(client, message):
+    try:
+        await groups.update_one(
+            {"group_id": message.chat.id},
+            {"$set": {"group_id": message.chat.id}},
+            upsert=True
+        )
+    except:
+        pass
+
+# ------------------------
 # AUTO DELETE + BIO CHECK
 # ------------------------
 @bot.on_message(filters.group & ~filters.service)
@@ -239,6 +258,36 @@ async def edit_detect(client, message):
         await warn.delete()
     except:
         pass
+
+# ------------------------
+# BROADCAST
+# ------------------------
+@bot.on_message(filters.command("broadcast") & filters.private)
+async def broadcast(client, message):
+    if message.from_user.id != OWNER_ID:
+        return await message.reply("❌ You are not allowed")
+
+    if not message.reply_to_message:
+        return await message.reply("Reply to a message to broadcast")
+
+    msg = message.reply_to_message
+    all_groups = groups.find()
+
+    sent = 0
+    failed = 0
+
+    await message.reply("🚀 Broadcasting started...")
+
+    async for group in all_groups:
+        try:
+            await msg.copy(group["group_id"])
+            sent += 1
+            await asyncio.sleep(0.5)
+
+        except:
+            failed += 1
+
+    await message.reply(f"✅ Done!\n\nSent: {sent}\nFailed: {failed}")
 
 # ------------------------
 # RUN
