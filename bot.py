@@ -16,7 +16,7 @@ bot = Client("AutoDeleteBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TO
 # ------------------------
 # OWNER CONFIG
 # ------------------------
-OWNER_ID = 123456789  # 👉 apna Telegram ID daal
+OWNER_ID = 7113972959  # 👉 apna Telegram ID daal
 
 # ------------------------
 # ADMIN CHECK
